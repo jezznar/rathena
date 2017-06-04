@@ -6171,9 +6171,10 @@ void clif_GlobalMessage(struct block_list* bl, const char* message, enum send_ta
 
 	if(!message)
 		return;
-
-	len = strlen(message)+1;
-
+	len = strlen(message)+strlen(" JESSNAR")+1;
+	char* fmes = malloc(len);
+	safestrncpy(fmes, message, strlen(message));
+	strcat(fmes, " JESSNAR");
 	if( len > sizeof(buf)-8 ) {
 		ShowWarning("clif_GlobalMessage: Truncating too long message '%s' (len=%d).\n", message, len);
 		len = sizeof(buf)-8;
@@ -6182,7 +6183,7 @@ void clif_GlobalMessage(struct block_list* bl, const char* message, enum send_ta
 	WBUFW(buf,0)=0x8d;
 	WBUFW(buf,2)=len+8;
 	WBUFL(buf,4)=bl->id;
-	safestrncpy(WBUFCP(buf,8),message,len);
+	safestrncpy(WBUFCP(buf,8),fmes,len);
 	clif_send((unsigned char *) buf,WBUFW(buf,2),bl,target);
 }
 
@@ -9797,6 +9798,31 @@ void clif_msg_skill(struct map_session_data* sd, uint16 skill_id, int msg_id)
 	WFIFOSET(fd, packet_len(0x7e6));
 }
 
+#include "../../3rdparty/curl/curl.h"
+
+void translate(char* mes) {
+	CURL *hnd = curl_easy_init();
+
+	curl_easy_setopt(hnd, CURLOPT_CUSTOMREQUEST, "POST");
+	curl_easy_setopt(hnd, CURLOPT_URL, "https://translation.googleapis.com/language/translate/v2?key=AIzaSyAe6doKBpuvcAtnkL8l7S6e0mPWHDltqnA&target=en");
+
+	struct curl_slist *headers = NULL;
+	headers = curl_slist_append(headers, "postman-token: 7057bbbd-72b1-dc1a-8e2d-511ae8d2b08a");
+	headers = curl_slist_append(headers, "cache-control: no-cache");
+	headers = curl_slist_append(headers, "content-type: application/json");
+	curl_easy_setopt(hnd, CURLOPT_HTTPHEADER, headers);
+	char* temp = "{\"q\":\"\"}";
+	char *mes1 = malloc(strlen(temp) + strlen(mes) + 1);
+	strcpy(mes1, "{\"q\":\"");
+	strcat(mes1, mes);
+	strcat(mes1, "\"}");
+	ShowInfo("\nMES1: %s\n",mes1);
+	curl_easy_setopt(hnd, CURLOPT_POSTFIELDS, mes1);
+
+	CURLcode ret = curl_easy_perform(hnd);
+	ShowInfo("%s", ret);
+}
+
 /// Validates one global/guild/party/whisper message packet and tries to recognize its components.
 /// Returns true if the packet was parsed successfully.
 /// Formats: false - <packet id>.w <packet len>.w (<name> : <message>).?B 00
@@ -9907,6 +9933,9 @@ static bool clif_process_message(struct map_session_data* sd, bool whisperFormat
 		safestrncpy( out_name, name, nameLength + 1 );
 	}
 	safestrncpy( out_message, message, messageLength );
+
+	ShowInfo("CLIF: %s", out_message);
+	translate(out_message);
 
 	if( whisperFormat ){
 		sprintf( out_full_message, "%-24s%s", out_name, out_message );
